@@ -43,12 +43,12 @@ bot.start(ctx => ctx.reply('Привет! Мультиличностный бо�
 
 bot.command('help', ctx => {
   ctx.reply(
-    '/list - показать личности\n' +
-    '/add name|prompt|kw1,kw2 - добавить личность\n' +
-    '/talk name|message - обратиться к личности\n' +
-    '/talk - выбрать личность из списка\n' +
-    '/clear name - очистить память личности\n' +
-    'Можно писать "Name: сообщение" или упоминать бота @bot'
+      '/list - показать личности\n' +
+      '/add name|prompt|kw1,kw2 - добавить личность (если не указаны ключевые слова, попробуем сгенерировать через DeepSeek)\n' +
+      '/talk name|message - обратиться к личности\n' +
+      '/talk - выбрать личность из списка\n' +
+      '/clear name - очистить память личности\n' +
+      'Можно писать "Name: сообщение" или упоминать бота @bot'
   );
 });
 
@@ -61,13 +61,37 @@ bot.command('list', async ctx => {
 
 bot.command('add', async ctx => {
   const payload = ctx.message.text.replace(/^\/add(\s+|$)/, '').trim();
-  if (!payload) return ctx.reply('Использование: /add name|prompt|kw1,kw2');
+  if (!payload) return ctx.reply('Использование: /add name|prompt|kw1,kw2 (kw опционально)');
   const [name, prompt, kws] = payload.split('|').map(s => s?.trim());
   if (!name || !prompt) return ctx.reply('Нужно указать name и prompt: /add name|prompt|kw1,kw2');
-  const keywords = kws ? kws.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+  // If user provided kws explicitly, use them; otherwise try to generate via DeepSeek
+  let keywords: string[] = [];
+  if (kws && kws.trim().length > 0) {
+    keywords = kws.split(',').map(s => s.trim()).filter(Boolean);
+  } else if (DEEPSEEK_API_KEY && DEEPSEEK_BASE_URL) {
+    try {
+      await ctx.replyWithChatAction('typing');
+      const extracted = await deepseek.extractKeywords(prompt, 12);
+      if (Array.isArray(extracted) && extracted.length > 0) {
+        keywords = extracted.map(k => String(k).trim()).filter(Boolean);
+        ctx.reply(`Сгенерированы ключевые слова через DeepSeek: ${keywords.join(', ')}`);
+      } else {
+        ctx.reply('DeepSeek не вернул ключевые слова, создаю личность без ключевых слов.');
+      }
+    } catch (e: any) {
+      console.warn('DeepSeek extractKeywords failed:', e?.message || e);
+      // fallback: no keywords
+      ctx.reply('Не удалось сгенерировать ключевые слова через DeepSeek — добавляю личность без них (или укажите вручную).');
+    }
+  } else {
+    // DeepSeek не настроен и kws не заданы
+    ctx.reply('Ключевые слова не указаны и DeepSeek не настроен — личность будет добавлена без ключевых слов.');
+  }
+
   try {
     await store.add(name, prompt, keywords);
-    ctx.reply(`Личность "${name}" добавлена.`);
+    ctx.reply(`Личность "${name}" добавлена. keywords: ${keywords.join(', ')}`);
   } catch (e: any) {
     ctx.reply(`Ошибка: ${e.message}`);
   }
@@ -129,12 +153,21 @@ bot.on('callback_query', async ctx => {
     const userId = ctx.from?.id as number;
     // store awaiting reply
     pendingReplies.set(userId, { personaId: persona.id, replyTo: sent.message_id });
+    // add TTL to pending (auto-clean after 2 minutes)
+    setTimeout(() => {
+      const p = pendingReplies.get(userId);
+      if (p && p.replyTo === sent.message_id) pendingReplies.delete(userId);
+    }, 2 * 60 * 1000);
   } catch (e: any) {
     // fallback: ask privately
     try {
       const userId = ctx.from?.id as number;
       const sent = await ctx.telegram.sendMessage(userId, `Напишите сообщение для ${persona.name}`, { reply_markup: { force_reply: true } });
       pendingReplies.set(userId, { personaId: persona.id, replyTo: sent.message_id });
+      setTimeout(() => {
+        const p = pendingReplies.get(userId);
+        if (p && p.replyTo === sent.message_id) pendingReplies.delete(userId);
+      }, 2 * 60 * 1000);
       ctx.reply('Отправил вам личное сообщение, напишите ответ там.');
     } catch (err) {
       console.error('Failed to ask for message:', err);
