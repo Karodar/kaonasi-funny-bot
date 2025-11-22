@@ -1,5 +1,5 @@
-# Builder stage with build deps for native modules
-FROM node:18-slim AS builder
+# Use bun base images to run and build with bun
+FROM oven/bun:latest AS builder
 WORKDIR /app
 
 # Install system dependencies required to build native modules (better-sqlite3)
@@ -12,20 +12,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   libsqlite3-dev \
   && rm -rf /var/lib/apt/lists/*
 
-# Copy package manifests
-COPY package.json package-lock.json* ./
-
-# Ensure we don't rely on a stale lockfile inside the image; install according to package.json
-RUN rm -f package-lock.json || true
-RUN npm install --unsafe-perm --no-audit --no-package-lock --progress=false
+# Copy package manifest and install dependencies with bun
+COPY package.json ./
+RUN bun install
 
 # Copy source and build
 COPY tsconfig.json ./
 COPY src ./src
-RUN npm run build
+RUN bun run build
 
 # Runtime image
-FROM node:18-slim
+FROM oven/bun:latest
 WORKDIR /app
 ENV NODE_ENV=production
 
@@ -38,4 +35,4 @@ COPY package.json ./
 RUN mkdir -p /app/data
 
 EXPOSE 3000
-CMD ["node", "dist/index.js"]
+CMD ["bun", "./dist/index.js"]

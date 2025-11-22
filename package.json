@@ -1,1 +1,24 @@
-{"name":"kaonasi-funny-bot","version":"0.1.0","description":"Telegram bot with multiple personalities (DeepSeek integration) - TypeScript","main":"dist/index.js","scripts":{"build":"tsc","start":"node dist/index.js","dev":"ts-node-dev --respawn --transpile-only src/index.ts"},"dependencies":{"axios":"^1.4.0","better-sqlite3":"^8.1.0","dotenv":"^16.0.0","telegraf":"^4.12.2","uuid":"^9.0.0"},"devDependencies":{"@types/node":"^20.0.0","ts-node-dev":"^2.0.0","typescript":"^5.0.0"}}
+{
+  "name": "kaonasi-funny-bot",
+  "version": "0.1.0",
+  "description": "Telegram bot with multiple personalities (DeepSeek integration) - TypeScript",
+  "main": "dist/index.js",
+  "packageManager": "bun@1",
+  "scripts": {
+    "build": "tsc",
+    "start": "bun ./dist/index.js",
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts"
+  },
+  "dependencies": {
+    "axios": "^1.4.0",
+    "better-sqlite3": "^8.1.0",
+    "dotenv": "^16.0.0",
+    "telegraf": "^4.12.2",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.0.0"
+  }
+}
